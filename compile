@@ -1,0 +1,6 @@
+#
+#gcc -lm -o psim psim.c dynSpecSim.c T2toolkit.c tempo2pred.c cheby2d.c t1polyco.c -L/usr/local/lib/cfitsio -lcfitsio
+
+gcc -o psim psim.c dynSpecSim.c T2toolkit.c tempo2pred.c cheby2d.c t1polyco.c -L../cfitsio/lib -I../cfitsio/include/ -lcfitsio -lfftw3 -lm
+
+
