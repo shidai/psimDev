@@ -46,12 +46,12 @@ int calACF (acfStruct *acfStructure)
 
 	for (i = 0; i < ns; i++)
 	{
-		acfStructure->s[i] = -10.0+i*steps;
+		acfStructure->s[i] = -acfStructure->size[1]+i*steps;
 	}
 
   for (i = 0; i < nf; i++)
 	{
-		acfStructure->f[i] = -10.0+i*stepf;
+		acfStructure->f[i] = -acfStructure->size[0]+i*stepf;
 	}
 
 	double rand;
@@ -105,35 +105,53 @@ int calACF (acfStruct *acfStructure)
 
 int dft2d (acfStruct *acfStructure, fftw_complex *out)
 {
+	int i;
 	int n0 = acfStructure->nf;
 	int n1 = acfStructure->ns;
 	double *in;
-
-	in = acfStructure->acf2d;
+	in = (double *)malloc(sizeof(double)*n0*n1);
 
 	fftw_plan p;
 	
-	p = fftw_plan_dft_r2c_2d (n0, n1, in, out, FFTW_MEASURE);
+	p = fftw_plan_dft_r2c_2d (n0, n1, in, out, FFTW_ESTIMATE);
+	//p = fftw_plan_dft_r2c_2d (n0, n1, in, out, FFTW_MEASURE);
+
+	for (i = 0; i < n0*n1; i++)
+	{
+		in[i] = acfStructure->acf2d[i];
+	}
 
 	fftw_execute(p);
 
 	fftw_destroy_plan(p);
+	free (in);
   
 	return 0;
 }
 
 int idft2d (acfStruct *acfStructure)
 {
+	int i;
 	int n0 = acfStructure->nf;
 	int n1 = acfStructure->ns;
 
+	fftw_complex *in;
+	in = (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*n0*n1);
+
 	fftw_plan p;
 	
-	p = fftw_plan_dft_2d (n0, n1, acfStructure->eField, acfStructure->intensity, FFTW_BACKWARD, FFTW_MEASURE);
+	p = fftw_plan_dft_2d (n0, n1, in, acfStructure->intensity, FFTW_BACKWARD, FFTW_ESTIMATE);
+
+	for (i = 0; i < n0*n1; i++)
+	{
+		in[i][0] = acfStructure->eField[i][0];
+		in[i][1] = acfStructure->eField[i][1];
+	}
 
 	fftw_execute(p);
 
 	fftw_destroy_plan(p);
+	fftw_free (in);
   
 	return 0;
 }
@@ -144,28 +162,6 @@ int power (acfStruct *acfStructure)
 	int nf = acfStructure->nf;
 	int ns = acfStructure->ns;
 	/////////////////////////////////////////////////////////////////////////////////
-	//printf ("intializing fft...\n");
-	acfStruct acfTest; // initialize the system, don't know why....
-	
-	acfTest.ns = acfStructure->ns;
-	acfTest.nf = acfStructure->nf;
-
-	allocateMemory (&acfTest);
-
-	for (i = 0; i < acfTest.nf*acfTest.ns; i++)
-	{
-		//printf ("acf2d %lf\n",acfStructure->acf2d[i]);
-		acfTest.acf2d[i] = acfStructure->acf2d[i];
-	}
-
-	fftw_complex *out_t;
-	out_t = (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*acfTest.nf*((int)(acfTest.ns/2)+1));
-	//out_t = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * (2*nf-2)*ns);
-	dft2d (&acfTest, out_t);
-
-	deallocateMemory (&acfTest);
-	//printf ("finish intializing fft...\n");
-	//////////////////////////////////////////////////////////////////////////////
 
   fftw_complex *out;
 	
@@ -194,7 +190,6 @@ int power (acfStruct *acfStructure)
 	}
 
 	fftw_free(out); 
-	fftw_free(out_t); 
 
 	return 0;
 }
@@ -282,23 +277,6 @@ int simDynSpec (acfStruct *acfStructure)
 	}
 
 	/////////////////////////////////////////////////////////////////////////////////
-	//printf ("intializing ifft...\n");
-	acfStruct acfTest; // initialize the system, don't know why....
-
-	acfTest.ns = acfStructure->ns;
-	acfTest.nf = acfStructure->nf;
-
-	allocateMemory (&acfTest);
-	for (i = 0; i < acfTest.nf*acfTest.ns; i++)
-	{
-		acfTest.eField[i][0] = acfStructure->eField[i][0];
-		acfTest.eField[i][1] = acfStructure->eField[i][0];
-	}
-
-	idft2d (&acfTest);
-
-	deallocateMemory (&acfTest);
-	//////////////////////////////////////////////////////////////////////////////
 
 	// ifft
 	idft2d (acfStructure);
@@ -324,7 +302,6 @@ int simDynSpec (acfStruct *acfStructure)
 
 	// choose a subwindow
 	double rand, rand2;
-	seed = TKsetSeed();
 	//printf ("seed %ld\n",seed);
 	rand = TKgaussDev(&seed);
 	rand2 = rand - floor(rand);
@@ -370,15 +347,18 @@ int windowSize (acfStruct *acfStructure, double *size)
 		size[1] = 6.0;
 	}
 
+	//size[0] = 10.0;
+	//size[1] = 10.0;
+
 	double ratio[2];
 	calSize (acfStructure, size, ratio);
 	//printf ("f0 ratio: %lf\n", ratio[0]);
 	//printf ("s0 ratio: %lf\n", ratio[1]);
 
-	while (ratio[0] >= 0.001 || ratio[1] >= 0.001)
+	while (ratio[0] >= 1e-7 || ratio[1] >= 1e-7)
 	{
-		size[0] = size[0] + 0.05*size[0];
-		size[1] = size[1] + 0.05*size[1];
+		size[0] = 1.05*size[0];
+		size[1] = 1.05*size[1];
 		calSize (acfStructure, size, ratio);
 		//printf ("f0 ratio: %lf\n", ratio[0]);
 		//printf ("s0 ratio: %lf\n", ratio[1]);
@@ -402,7 +382,7 @@ int calSize (acfStruct *acfStructure, double *size, double *ratio)
 
 	double s[ns], acfs[ns], smax;
 	double f[nf], acff[nf], fmax;
-	double c; // value at the center
+	//double c; // value at the center
 
 	for (i = 0; i < ns; i++)
 	{
@@ -414,7 +394,7 @@ int calSize (acfStruct *acfStructure, double *size, double *ratio)
 		f[i] = -size[0]+i*stepf;
 	}
 
-	c = exp(-pow((pow(fabs(s[(int)(ns/2)]+2.0*rand*0.4*f[(int)(nf/2)]),2.5)+pow(fabs(f[(int)(nf/2)]),1.5)),2.0/3.0));
+	//c = exp(-pow((pow(fabs(s[(int)(ns/2)]+2.0*rand*0.4*f[(int)(nf/2)]),2.5)+pow(fabs(f[(int)(nf/2)]),1.5)),2.0/3.0));
 
 	for (i = 0; i < nf; i++)
 	{
@@ -429,8 +409,8 @@ int calSize (acfStruct *acfStructure, double *size, double *ratio)
 	smax = find_peak_value (ns, acfs);
 	fmax = find_peak_value (nf, acff);
 
-	ratio[0] = fmax/c;
-	ratio[1] = smax/c;
+	ratio[0] = fmax;
+	ratio[1] = smax;
 
 	return 0;
 }
@@ -464,10 +444,11 @@ double find_peak_value (int n, double *s)
 void preAllocateMemory (acfStruct *acfStructure)
 {
 	long seed;
-	//seed = -1417748812;
+	//seed = -1420603014;
 	seed = TKsetSeed();
 	printf ("Seed %ld\n",seed);
 	acfStructure->phaseGradient = TKgaussDev(&seed);
+	//acfStructure->phaseGradient = 0.0;
 	printf ("Phase gradient: %lf\n", acfStructure->phaseGradient);
 
 	double bw, f0, tint, t0;
