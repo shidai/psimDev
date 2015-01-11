@@ -72,28 +72,26 @@ int calACF (acfStruct *acfStructure)
 
 	//////////////////////////////////////////////////////////////////
 
-	n = 0;
 	for (i = 0; i < nf; i++)
 	{
 		for (j = 0; j < ns; j++)
 		{
-			if (i > (int)(nf/2) && j > (int)(ns/2))
+			if (i >= (int)ceil(nf/2.0) && j >= (int)ceil(ns/2.0))
 			{
-				acfStructure->acf2d[i*ns+j] = acf[ns*(i-(int)(nf/2)-1)+(j-(int)(ns/2)-1)];
+				acfStructure->acf2d[i*ns+j] = acf[ns*(i-(int)ceil(nf/2.0))+(j-(int)ceil(ns/2.0))];
 			}
-			else if  (i > (int)(nf/2) && j <= (int)(ns/2))
+			else if  (i >= (int)ceil(nf/2.0) && j < (int)ceil(ns/2.0))
 			{
-				acfStructure->acf2d[i*ns+j] = acf[ns*(i-(int)(nf/2)-1)+(j+(int)(ns/2))];
+				acfStructure->acf2d[i*ns+j] = acf[ns*(i-(int)ceil(nf/2.0))+(j+(int)floor(ns/2.0))];
 			}
-			else if  (i <= (int)(nf/2) && j <= (int)(ns/2))
+			else if  (i < (int)ceil(nf/2.0) && j < (int)ceil(ns/2.0))
 			{
-				acfStructure->acf2d[i*ns+j] = acf[ns*(i+(int)(nf/2))+(j+(int)(ns/2))];
+				acfStructure->acf2d[i*ns+j] = acf[ns*(i+(int)floor(nf/2.0))+(j+(int)floor(ns/2.0))];
 			}
-			else if  (i <= (int)(nf/2) && j > (int)(ns/2))
+			else if  (i < (int)ceil(nf/2.0) && j >= (int)ceil(ns/2.0))
 			{
-				acfStructure->acf2d[i*ns+j] = acf[ns*(i+(int)(nf/2))+(j-(int)(ns/2)-1)];
+				acfStructure->acf2d[i*ns+j] = acf[ns*(i+(int)floor(nf/2.0))+(j-(int)ceil(ns/2.0))];
 			}
-			n++;
 		}
 	}
 
@@ -141,6 +139,7 @@ int idft2d (acfStruct *acfStructure)
 	fftw_plan p;
 	
 	p = fftw_plan_dft_2d (n0, n1, in, acfStructure->intensity, FFTW_BACKWARD, FFTW_ESTIMATE);
+	//p = fftw_plan_dft_2d (n0, n1, in, acfStructure->intensity, FFTW_BACKWARD, FFTW_MEASURE);
 
 	for (i = 0; i < n0*n1; i++)
 	{
@@ -181,7 +180,14 @@ int power (acfStruct *acfStructure)
 			}
 			else
 			{
-				acfStructure->psrt[n] = sqrt(sqrt(pow(out[i*((int)(ns/2)+1)+ns-j][0],2.0)+pow(out[i*((int)(ns/2)+1)+ns-j][1],2.0)));
+				if (i == 0)
+				{
+					acfStructure->psrt[n] = sqrt(sqrt(pow(out[i*((int)(ns/2)+1)+ns-j][0],2.0)+pow(out[i*((int)(ns/2)+1)+ns-j][1],2.0)));
+				}
+				else
+				{
+					acfStructure->psrt[n] = sqrt(sqrt(pow(out[(nf-i)*((int)(ns/2)+1)+ns-j][0],2.0)+pow(out[(nf-i)*((int)(ns/2)+1)+ns-j][1],2.0)));
+				}
 			}
 			//printf ("%lf ", acfStructure->psrt[n]);
 			n++;
@@ -347,15 +353,12 @@ int windowSize (acfStruct *acfStructure, double *size)
 		size[1] = 6.0;
 	}
 
-	//size[0] = 10.0;
-	//size[1] = 10.0;
-
 	double ratio[2];
 	calSize (acfStructure, size, ratio);
 	//printf ("f0 ratio: %lf\n", ratio[0]);
 	//printf ("s0 ratio: %lf\n", ratio[1]);
 
-	while (ratio[0] >= 1e-7 || ratio[1] >= 1e-7)
+	while (ratio[0] >= 1e-6 || ratio[1] >= 1e-6)
 	{
 		size[0] = 1.05*size[0];
 		size[1] = 1.05*size[1];
