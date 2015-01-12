@@ -21,6 +21,8 @@ int main(int argc,char *argv[])
   int sub;
   long double timeFromStart;
   
+	double tempFlux;
+
   fitsfile *fptr;
   int status=0;
   char file[128];
@@ -125,13 +127,20 @@ int main(int argc,char *argv[])
 					scintScale = acfStructure.dynSpecWindow[j][i];
 				}
 	      
+				tempFlux = 0.0;
+				for (l=0;l<nPhaseBins;l++)
+				{
+					tempFlux += evaluateTemplate(&control,&tmpl,j,0,l);
+				}
+				tempFlux = tempFlux/nPhaseBins;
+
 				for (k=0;k<control.npol;k++)
 				{
 					for (l=0;l<nPhaseBins;l++)
 					{
-						chan[j].pol[k].val[l] = control.whiteLevel*TKgaussDev(&seed);
-		      	//chan[j].pol[k].val[l] += evaluateTemplate(&control,j,k,l);
-		      	chan[j].pol[k].val[l] += scintScale*evaluateTemplate(&control,&tmpl,j,k,l);
+						//chan[j].pol[k].val[l] = control.whiteLevel*TKgaussDev(&seed);
+		      	//chan[j].pol[k].val[l] += scintScale*evaluateTemplate(&control,&tmpl,j,k,l);
+		      	chan[j].pol[k].val[l] = scintScale*evaluateTemplate(&control,&tmpl,j,k,l)*control.flux[j]/tempFlux + control.radioNoise*TKgaussDev(&seed);
 		      	//printf ("%lf\n",evaluateTemplate(&control,&tmpl,j,k,l));
 					}
 				}
@@ -957,7 +966,8 @@ int readObservation(FILE *fin,controlStruct *control)
   char param[1024],val[1024];
   int endit=-1;
   int finished=0;
-
+	int i;
+	double f0, f1;
 
   printf("Reading observation table\n");
   // Find the start observation
@@ -1030,13 +1040,54 @@ int readObservation(FILE *fin,controlStruct *control)
 	  fscanf(fin,"%d",&(control->ntimecoeff));
 	else if (strcasecmp(param,"WHITE_LEVEL")==0)
 	  fscanf(fin,"%lf",&(control->whiteLevel));
+	else if (strcasecmp(param,"TSYS")==0)
+	  fscanf(fin,"%lf",&(control->tsys));
+	else if (strcasecmp(param,"TSKY")==0)
+	  fscanf(fin,"%lf",&(control->tsky));
+	else if (strcasecmp(param,"GAIN")==0)
+	  fscanf(fin,"%lf",&(control->gain));
+	else if (strcasecmp(param,"CFLUX")==0)
+	  fscanf(fin,"%lf",&(control->cFlux));
+	else if (strcasecmp(param,"SI")==0)
+	  fscanf(fin,"%lf",&(control->si));
       }
   } while (endit==0);
 
+	//////////////////////////////////////////////////////////////////////
+  f0 = control->cFreq + fabs(control->obsBW)/2.0; // Highest frequency
+	if (control->cFlux != 0.0 && control->si != 0.0)
+	{
+		control->flux = (double *)malloc(sizeof(double)*control->nchan);
 
+		for (i = 0; i < control->nchan; i++)
+		{
+			f1 = f0 - fabs(control->obsBW/(double)control->nchan)*i;
+			control->flux[i] = pow(f1/1369.0, control->si)*control->cFlux;
+		}
+	}
+	else 
+	{
+		printf ("cFlux and spectral index needed!\n");
+		exit (1);
+	}
+
+	//////////////////////////////////////////////////////////////////////
+	if (control->tsys != 0.0 && control->tsky != 0.0 && control->gain != 0.0 && control->whiteLevel == 0)
+	{
+		control->radioNoise = (control->tsys+control->tsky)/(control->gain)/sqrt(2.0*(control->tsubRequested/control->nbin)*(fabs(control->obsBW)/control->nchan));
+	}
+	else if (control->tsys == 0.0 && control->tsky == 0.0 && control->gain == 0.0 && control->whiteLevel != 0)
+	{
+		control->radioNoise = control->whiteLevel;
+	}
+	else 
+	{
+		printf ("Double definiation of radio-meter noise!\n");
+		exit (1);
+	}
+	printf ("Nchan: %d; Tsys: %lf; Tsky: %lf; Gain: %lf; Radio-meter noise: %lf mJy\n", control->nchan, control->tsys, control->tsky, control->gain, control->radioNoise);
 
   return finished;
-
 }
 
 void initialiseControl(controlStruct *control)
@@ -1065,7 +1116,13 @@ void initialiseControl(controlStruct *control)
   control->whiteLevel = 0;
   control->scint_ts  = 0.0;
   control->scint_freqbw = 0.0;
+  control->tsys = 0.0;
+  control->tsky = 0.0;
+  control->gain = 0.0;
 
+  control->cFlux = 0.0;
+  control->si = 0.0;
+  control->radioNoise = 0.0;
   // Note that the DM comes from the ephemeris
 }
 

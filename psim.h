@@ -91,6 +91,15 @@ typedef struct controlStruct {
   double tsub; // Time for each subintegration [modified to give an integral number of pulses per subint] (s)
   double dm;
   double whiteLevel;
+	
+	double tsys;   // system temperature
+	double tsky;   // sky temperature
+	double gain;   
+	double radioNoise;
+
+	double cFlux; // flux density at 1.4GHz, mJy
+	double si;  // spectral index
+	double *flux;  // flux density in each channel
 
   double scint_freqbw;
   double scint_ts;
