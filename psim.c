@@ -972,86 +972,86 @@ int readObservation(FILE *fin,controlStruct *control)
   printf("Reading observation table\n");
   // Find the start observation
   while (!feof(fin))
-    {
-      if (fscanf(fin,"%s",param)==1)
 	{
-	  if (strcasecmp(param,"START_OBS")==0)
+		if (fscanf(fin,"%s",param)==1)
+		{
+			if (strcasecmp(param,"START_OBS")==0)
 	    {
 	      endit=0;
 	      break;
 	    }
+		}
+		else 
+			return 1;
 	}
-      else 
-	return 1;
-    }
 
   printf("Got to this bit with %d\n",endit);
   if (endit==-1)
     return 1;
 
   do
-    {
-      fscanf(fin,"%s",param);
-      if (strcasecmp(param,"END_OBS")==0)
-	endit=1;
-      else
 	{
-	  if (strcasecmp(param,"PHEAD")==0)
-	    fscanf(fin,"%s",control->primaryHeaderParams);
-	else if (strcasecmp(param,"SRC")==0)
-	  fscanf(fin,"%s",control->src);
-	else if (strcasecmp(param,"EXACT_EPHEMERIS")==0)
-	  fscanf(fin,"%s",control->exact_ephemeris);
-	else if (strcasecmp(param,"TEMPLATE")==0)
-	  fscanf(fin,"%s",control->template);
-	else if (strcasecmp(param,"SCINT_TS")==0)
-	  fscanf(fin,"%lf",&(control->scint_ts));
-	else if (strcasecmp(param,"SCINT_FREQBW")==0)
-	  fscanf(fin,"%lf",&(control->scint_freqbw));	  
-	else if (strcasecmp(param,"FILE")==0)
-	  fscanf(fin,"%s",control->fname);
-	else if (strcasecmp(param,"TYPE")==0)
-	  fscanf(fin,"%s",control->type);
-	else if (strcasecmp(param,"STT_IMJD")==0)
-	  fscanf(fin,"%d",&(control->stt_imjd));
-	else if (strcasecmp(param,"STT_SMJD")==0)
-	  fscanf(fin,"%lf",&(control->stt_smjd));
-	else if (strcasecmp(param,"STT_OFFS")==0)
-	  fscanf(fin,"%lf",&(control->stt_offs));
-	else if (strcasecmp(param,"TSUB")==0)
-	  fscanf(fin,"%lf",&(control->tsubRequested));
-	else if (strcasecmp(param,"CFREQ")==0)
-	  fscanf(fin,"%lf",&(control->cFreq));
-	else if (strcasecmp(param,"BW")==0)
-	  fscanf(fin,"%lf",&(control->obsBW));
-	else if (strcasecmp(param,"NCHAN")==0)
-	  fscanf(fin,"%d",&(control->nchan));
-	else if (strcasecmp(param,"NBIN")==0)
-	  fscanf(fin,"%d",&(control->nbin));
-	else if (strcasecmp(param,"NPOL")==0)
-	  fscanf(fin,"%d",&(control->npol));
-	else if (strcasecmp(param,"NSUB")==0)
-	  fscanf(fin,"%d",&(control->nsub));
-	else if (strcasecmp(param,"SEGLENGTH")==0)
-	  fscanf(fin,"%lf",&(control->segLength));
-	else if (strcasecmp(param,"NFREQ_COEFF")==0)
-	  fscanf(fin,"%d",&(control->nfreqcoeff));
-	else if (strcasecmp(param,"NTIME_COEFF")==0)
-	  fscanf(fin,"%d",&(control->ntimecoeff));
-	else if (strcasecmp(param,"WHITE_LEVEL")==0)
-	  fscanf(fin,"%lf",&(control->whiteLevel));
-	else if (strcasecmp(param,"TSYS")==0)
-	  fscanf(fin,"%lf",&(control->tsys));
-	else if (strcasecmp(param,"TSKY")==0)
-	  fscanf(fin,"%lf",&(control->tsky));
-	else if (strcasecmp(param,"GAIN")==0)
-	  fscanf(fin,"%lf",&(control->gain));
-	else if (strcasecmp(param,"CFLUX")==0)
-	  fscanf(fin,"%lf",&(control->cFlux));
-	else if (strcasecmp(param,"SI")==0)
-	  fscanf(fin,"%lf",&(control->si));
-      }
-  } while (endit==0);
+		fscanf(fin,"%s",param);
+		if (strcasecmp(param,"END_OBS")==0)
+			endit=1;
+		else
+		{
+			if (strcasecmp(param,"PHEAD")==0)
+				fscanf(fin,"%s",control->primaryHeaderParams);
+			else if (strcasecmp(param,"SRC")==0)
+			  fscanf(fin,"%s",control->src);
+			else if (strcasecmp(param,"EXACT_EPHEMERIS")==0)
+			  fscanf(fin,"%s",control->exact_ephemeris);
+			else if (strcasecmp(param,"TEMPLATE")==0)
+			  fscanf(fin,"%s",control->template);
+			else if (strcasecmp(param,"SCINT_TS")==0)
+			  fscanf(fin,"%lf",&(control->scint_ts));
+			else if (strcasecmp(param,"SCINT_FREQBW")==0)
+			  fscanf(fin,"%lf",&(control->scint_freqbw));	  
+			else if (strcasecmp(param,"FILE")==0)
+			  fscanf(fin,"%s",control->fname);
+			else if (strcasecmp(param,"TYPE")==0)
+			  fscanf(fin,"%s",control->type);
+			else if (strcasecmp(param,"STT_IMJD")==0)
+			  fscanf(fin,"%d",&(control->stt_imjd));
+			else if (strcasecmp(param,"STT_SMJD")==0)
+			  fscanf(fin,"%lf",&(control->stt_smjd));
+			else if (strcasecmp(param,"STT_OFFS")==0)
+			  fscanf(fin,"%lf",&(control->stt_offs));
+			else if (strcasecmp(param,"TSUB")==0)
+			  fscanf(fin,"%lf",&(control->tsubRequested));
+			else if (strcasecmp(param,"CFREQ")==0)
+			  fscanf(fin,"%lf",&(control->cFreq));
+			else if (strcasecmp(param,"BW")==0)
+			  fscanf(fin,"%lf",&(control->obsBW));
+			else if (strcasecmp(param,"NCHAN")==0)
+			  fscanf(fin,"%d",&(control->nchan));
+			else if (strcasecmp(param,"NBIN")==0)
+			  fscanf(fin,"%d",&(control->nbin));
+			else if (strcasecmp(param,"NPOL")==0)
+			  fscanf(fin,"%d",&(control->npol));
+			else if (strcasecmp(param,"NSUB")==0)
+			  fscanf(fin,"%d",&(control->nsub));
+			else if (strcasecmp(param,"SEGLENGTH")==0)
+			  fscanf(fin,"%lf",&(control->segLength));
+			else if (strcasecmp(param,"NFREQ_COEFF")==0)
+			  fscanf(fin,"%d",&(control->nfreqcoeff));
+			else if (strcasecmp(param,"NTIME_COEFF")==0)
+			  fscanf(fin,"%d",&(control->ntimecoeff));
+			else if (strcasecmp(param,"WHITE_LEVEL")==0)
+			  fscanf(fin,"%lf",&(control->whiteLevel));
+			else if (strcasecmp(param,"TSYS")==0)
+			  fscanf(fin,"%lf",&(control->tsys));
+			else if (strcasecmp(param,"TSKY")==0)
+			  fscanf(fin,"%lf",&(control->tsky));
+			else if (strcasecmp(param,"GAIN")==0)
+			  fscanf(fin,"%lf",&(control->gain));
+			else if (strcasecmp(param,"CFLUX")==0)
+			  fscanf(fin,"%lf",&(control->cFlux));
+			else if (strcasecmp(param,"SI")==0)
+				fscanf(fin,"%lf",&(control->si));
+		}
+	} while (endit==0);
 
 	//////////////////////////////////////////////////////////////////////
   f0 = control->cFreq + fabs(control->obsBW)/2.0; // Highest frequency
