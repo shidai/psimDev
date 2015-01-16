@@ -116,11 +116,17 @@ int main(int argc,char *argv[])
 		{
 			// Calculate period for this subint
 			calculatePeriod(i,&control,pred,timeFromStart);
-	  	//printf("period = %g\n",(double)control.period);
+
+			// Calculate phase offset for each channel
 	  	for (j=0;j<control.nchan;j++)
 	    {
-				//seed = TKsetSeed();
 				calculatePhaseOffset(j,&control,pred,timeFromStart);
+			}
+
+	  	//printf("period = %g\n",(double)control.period);
+			#pragma omp parallel for private(k,l,scintScale,tempFlux)
+	  	for (j=0;j<control.nchan;j++)
+	    {
 				if (control.scint_ts > 0)
 				{
 					//printf("Here with timeFromStart %Lg\n",timeFromStart);
