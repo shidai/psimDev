@@ -9,6 +9,7 @@
 #include "fitsio.h"
 #include "tempo2pred.h"
 
+// toff in calculatePhaseOffset? Not fixed yet
 int main(int argc,char *argv[])
 {
   T2Predictor pred;
@@ -33,7 +34,7 @@ int main(int argc,char *argv[])
   FILE *fin;
 
   tmplStruct tmpl;
-  double scintScale=1;
+  double scintScale=1.0;
 	acfStruct acfStructure; // dynamical spectrum
   //float **scint;
   //int setScint=0;
@@ -131,6 +132,10 @@ int main(int argc,char *argv[])
 				{
 					//printf("Here with timeFromStart %Lg\n",timeFromStart);
 					scintScale = acfStructure.dynSpecWindow[j][i];
+				}
+				else
+				{
+					scintScale = 1.0;
 				}
 	      
 				tempFlux = 0.0;
@@ -916,7 +921,7 @@ double evaluateTemplateComponent(tmplStruct *tmpl,double phi,int chan,int stokes
   //result = tmpl->channel[chan].pol[stokes].comp[comp].height *
   int k;
   for (k=0;k<tmpl->channel[chan].pol[stokes].comp[comp].nVm;k++)
-  	result += fabs(tmpl->channel[chan].pol[stokes].comp[comp].vonMises[k].height) *
+  	result += (tmpl->channel[chan].pol[stokes].comp[comp].vonMises[k].height) *
     	exp(tmpl->channel[chan].pol[stokes].comp[comp].vonMises[k].concentration*
 	(cos((phi - tmpl->channel[chan].pol[stokes].comp[comp].vonMises[k].centroid + phiRot)*2*M_PI)-1));
   return result;
@@ -953,10 +958,13 @@ void calculatePhaseOffset(int chan,controlStruct *control,T2Predictor pred,long 
   long double f0,freq,phase0,mjd0;
   long double toff;
 
-  //toff = (int)(control->tsub/2.0/control->period+0.5)*control->period;
-	toff = 0.0;
+	////////////////////////////////////////////////////////////////////
+	// Need to understand this
+  toff = (int)(control->tsub/2.0/control->period+0.5)*control->period;
+	//toff = 0.0;
+	////////////////////////////////////////////////////////////////////
+	
   mjd0 = control->stt_imjd + (control->stt_smjd + control->stt_offs)/86400.0L + (timeFromStart + toff)/86400.0L;
-  //mjd0 = control->stt_imjd + (control->stt_smjd + control->stt_offs)/86400.0L + (timeFromStart + control->tsub/2.0)/86400.0L;
   f0 = control->cFreq + fabs(control->obsBW)/2.0; // Highest frequency
   //freq = f0 - fabs(control->obsBW/(double)control->nchan)*chan + fabs(control->obsBW/(double)control->nchan)*0.5;
   freq = f0 - fabs(control->obsBW/(double)control->nchan)*chan;
@@ -1061,10 +1069,9 @@ int readObservation(FILE *fin,controlStruct *control)
 
 	//////////////////////////////////////////////////////////////////////
   f0 = control->cFreq + fabs(control->obsBW)/2.0; // Highest frequency
+	control->flux = (double *)malloc(sizeof(double)*control->nchan);
 	if (control->cFlux != 0.0 && control->si != 0.0)
 	{
-		control->flux = (double *)malloc(sizeof(double)*control->nchan);
-
 		for (i = 0; i < control->nchan; i++)
 		{
 			f1 = f0 - fabs(control->obsBW/(double)control->nchan)*i;
@@ -1073,8 +1080,11 @@ int readObservation(FILE *fin,controlStruct *control)
 	}
 	else 
 	{
-		printf ("cFlux and spectral index needed!\n");
-		exit (1);
+		printf ("cFlux and spectral index not provided!\n");
+		for (i = 0; i < control->nchan; i++)
+		{
+			control->flux[i] = 1000.0;
+		}
 	}
 
 	//////////////////////////////////////////////////////////////////////
