@@ -111,12 +111,15 @@ int main(int argc,char *argv[])
 			calculateScintScale (&acfStructure, &control);
 		}
 
+		// calculate stt_offs
+		calculateStt_offs(&control, pred);
+
 		//////////////////////////////////////////////////////////////
     timeFromStart = 0;
     for (i=0;i<control.nsub;i++)
 		{
 			// Calculate period for this subint
-			calculatePeriod(i,&control,pred,timeFromStart);
+			calculatePeriod(&control,pred,timeFromStart);
 
 			// Calculate phase offset for each channel
 	  	for (j=0;j<control.nchan;j++)
@@ -318,6 +321,7 @@ void writeChannels(channel *chan,controlStruct *control,fitsfile *fptr,int subin
     int i,j,n;
     float dataVals[nchan*nbin];
 
+		//printf ("DAI %.10lf\n", offsSub);
     // MUST FIX
         rajd = 69.3158537729834; // Hardcoded to 0437
         decjd = -47.2523961499288; // Hardcoded to 0437
@@ -531,42 +535,60 @@ void writePredictor(fitsfile *fptr,char *fname)
   fclose(fin);
 }
 
-void calculatePeriod(int sub,controlStruct *control, T2Predictor pred, long double timeFromStart)
+void calculateStt_offs(controlStruct *control, T2Predictor pred)
+{
+  long double mjd0;
+  long double freq;
+	long double phase0;
+
+	freq = control->cFreq;
+	mjd0 = control->stt_imjd + (control->stt_smjd)/86400.0L;
+	control->period = 1.0/T2Predictor_GetFrequency(&pred,mjd0,freq);
+
+  phase0 = T2Predictor_GetPhase(&pred,mjd0,freq);
+  //control->stt_offs = (phase0 - floorl(phase0))*control->period;
+  control->stt_offs = (ceill(phase0) - phase0)*control->period;
+	//printf("Here with %g %g %g %g\n",(double)freq,(double)mjd0,(double)control->period,(double)control->tsub);
+}
+
+void calculatePeriod(controlStruct *control, T2Predictor pred, long double timeFromStart)
 {
   long double mjd0;
   long double freq;
   long double toff;
 
-	/*
   freq = control->cFreq;
   toff = (int)(control->tsubRequested/2.0/control->period+0.5)*control->period;
   mjd0 = control->stt_imjd + (control->stt_smjd + control->stt_offs)/86400.0L + (timeFromStart + toff)/86400.0L; // Centre of subint
-		//		mjd0 = control->stt_imjd + (control->stt_smjd + control->stt_offs + timeFromStart)/86400.0L + control->tsubRequested*0.5/86400.0L;
   control->period = 1.0/T2Predictor_GetFrequency(&pred,mjd0,freq);
   control->tsub = ((int)(control->tsubRequested/control->period+0.5))*control->period;
-	printf("Here with %g %g %g %g\n",(double)freq,(double)mjd0,(double)control->period,(double)control->tsub);
 
   toff = (int)(control->tsub/2.0/control->period+0.5)*control->period;
   mjd0 = control->stt_imjd + (control->stt_smjd + control->stt_offs)/86400.0L + (timeFromStart + toff)/86400.0L; // Centre of subint
-		//		mjd0 = control->stt_imjd + (control->stt_smjd + control->stt_offs + timeFromStart)/86400.0L + control->tsubRequested*0.5/86400.0L;
   control->period = 1.0/T2Predictor_GetFrequency(&pred,mjd0,freq);
   control->tsub = ((int)(control->tsubRequested/control->period+0.5))*control->period;
 
-	printf("Here2 with %g %g %g %g\n",(double)freq,(double)mjd0,(double)control->period,(double)control->tsub);
-	*/
+	/*
+	// test
+	long double mjd1;
+	long double period1;
+  mjd1 = control->stt_imjd + (control->stt_smjd + control->stt_offs)/86400.0L + (timeFromStart)/86400.0L; // Centre of subint
+  period1 = 1.0/T2Predictor_GetFrequency(&pred,mjd1,freq);
+	printf ("DAI %.10Lf %.10Lf\n", control->period, period1);
+	//printf ("DAI %.15Lf\n", control->period-period1);
+	
 	if (sub == 0)
 	{
 		freq = control->cFreq;
 		mjd0 = control->stt_imjd + (control->stt_smjd + control->stt_offs)/86400.0L + control->tsubRequested*0.5/86400.0L;
 		control->period = 1.0/T2Predictor_GetFrequency(&pred,mjd0,freq);
 		control->tsub = ((int)(control->tsubRequested/control->period+0.5))*control->period;
-		//printf("Here with %g %g %g %g\n",(double)freq,(double)mjd0,(double)control->period,(double)control->tsub);
 
 		//Iterate once more with tsub instead of tsubRequested
 		mjd0 = control->stt_imjd + (control->stt_smjd + control->stt_offs)/86400.0L + control->tsub*0.5/86400.0L;
 		control->period = 1.0/T2Predictor_GetFrequency(&pred,mjd0,freq);
+		//control->tsub = ((int)(control->tsub/control->period+0.5))*control->period;
 		control->tsub = ((int)(control->tsubRequested/control->period+0.5))*control->period;
-		//printf("Here2 with %g %g %g %g\n",(double)freq,(double)mjd0,(double)control->period,(double)control->tsub);
 	}
 	else
 	{
@@ -575,18 +597,17 @@ void calculatePeriod(int sub,controlStruct *control, T2Predictor pred, long doub
 		toff = (int)(control->tsub/2.0/control->period+0.5)*control->period;
 		mjd0 = control->stt_imjd + (control->stt_smjd + control->stt_offs)/86400.0L + (timeFromStart + toff)/86400.0L;
 		control->period = 1.0/T2Predictor_GetFrequency(&pred,mjd0,freq);
+		//control->tsub = ((int)(control->tsub/control->period+0.5))*control->period;
 		control->tsub = ((int)(control->tsubRequested/control->period+0.5))*control->period;
-		//printf("Here3 with %g %g %g %g\n",(double)freq,(double)mjd0,(double)control->period,(double)control->tsub);
 
 		//toff = 0.0;
 		toff = (int)(control->tsub/2.0/control->period+0.5)*control->period;
 		mjd0 = control->stt_imjd + (control->stt_smjd + control->stt_offs)/86400.0L + (timeFromStart + toff)/86400.0L;
 		control->period = 1.0/T2Predictor_GetFrequency(&pred,mjd0,freq);
+		//control->tsub = ((int)(control->tsub/control->period+0.5))*control->period;
 		control->tsub = ((int)(control->tsubRequested/control->period+0.5))*control->period;
-		//printf("Here4 with %g %g %g %g\n",(double)freq,(double)mjd0,(double)control->period,(double)control->tsub);
-
-		//mjd0 = control->stt_imjd + (control->stt_smjd + control->stt_offs)/86400.0L + (timeFromStart + toff)/86400.0L;
-		} 
+	} 
+	*/
 }
 
 // Initialises the template, but does not allocate memory for the profiles
@@ -948,6 +969,7 @@ double evaluateTemplate(controlStruct *control, tmplStruct *tmpl, int chan, int 
   int k;
   for (k=0;k<tmpl->channel[tChan].pol[pol].nComp;k++)
     {
+      //result += evaluateTemplateComponent(tmpl,bin/(double)control->nbin,tChan,pol,k,0.0);
       result += evaluateTemplateComponent(tmpl,bin/(double)control->nbin,tChan,pol,k,control->phaseOffset[chan]);
     }
   return result;
@@ -956,22 +978,24 @@ double evaluateTemplate(controlStruct *control, tmplStruct *tmpl, int chan, int 
 void calculatePhaseOffset(int chan,controlStruct *control,T2Predictor pred,long double timeFromStart)
 {
   long double f0,freq,phase0,mjd0;
+	long double cPhase;  //  phase shift at the observing central frequency
   long double toff;
 
 	////////////////////////////////////////////////////////////////////
 	// Need to understand this
-  toff = (int)(control->tsub/2.0/control->period+0.5)*control->period;
-	//toff = 0.0;
+  //toff = (int)(control->tsub/2.0/control->period+0.5)*control->period;
+	toff = 0.0;
 	////////////////////////////////////////////////////////////////////
 	
   mjd0 = control->stt_imjd + (control->stt_smjd + control->stt_offs)/86400.0L + (timeFromStart + toff)/86400.0L;
   f0 = control->cFreq + fabs(control->obsBW)/2.0; // Highest frequency
   //freq = f0 - fabs(control->obsBW/(double)control->nchan)*chan + fabs(control->obsBW/(double)control->nchan)*0.5;
   freq = f0 - fabs(control->obsBW/(double)control->nchan)*chan;
-  phase0 = T2Predictor_GetPhase(&pred,mjd0,freq);
+  cPhase = T2Predictor_GetPhase(&pred,mjd0,control->cFreq);
+  phase0 = cPhase - T2Predictor_GetPhase(&pred,mjd0,freq);
   control->phaseOffset[chan] = (phase0 - floorl(phase0));
   //printf("DAI SHI: %.2Lf %.15Lf\n", freq, phase0);
-  //printf("DAI SHI: %.2Lf %.15Lf\n", freq, control->phaseOffset[chan]);
+  printf("DAI SHI: %.2Lf %.15Lf\n", freq, control->phaseOffset[chan]);
   //printf("DAI SHI: %.15Lf %.15Lf\n",mjd0,control->phaseOffset[chan]);
 }
 
@@ -1030,8 +1054,8 @@ int readObservation(FILE *fin,controlStruct *control)
 			  fscanf(fin,"%d",&(control->stt_imjd));
 			else if (strcasecmp(param,"STT_SMJD")==0)
 			  fscanf(fin,"%lf",&(control->stt_smjd));
-			else if (strcasecmp(param,"STT_OFFS")==0)
-			  fscanf(fin,"%lf",&(control->stt_offs));
+			//else if (strcasecmp(param,"STT_OFFS")==0)
+			//  fscanf(fin,"%lf",&(control->stt_offs));
 			else if (strcasecmp(param,"TSUB")==0)
 			  fscanf(fin,"%lf",&(control->tsubRequested));
 			else if (strcasecmp(param,"CFREQ")==0)
