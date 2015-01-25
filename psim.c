@@ -9,7 +9,6 @@
 #include "fitsio.h"
 #include "tempo2pred.h"
 
-// toff in calculatePhaseOffset? Not fixed yet
 int main(int argc,char *argv[])
 {
   T2Predictor pred;
@@ -112,7 +111,7 @@ int main(int argc,char *argv[])
 		}
 
 		// calculate stt_offs
-		calculateStt_offs(&control, pred);
+		//calculateStt_offs(&control, pred);
 
 		//////////////////////////////////////////////////////////////
     timeFromStart = 0;
@@ -280,29 +279,30 @@ void writeChannels(channel *chan,controlStruct *control,fitsfile *fptr,int subin
   if (status) {fits_report_error(stdout,status); exit(1);}
   
   if (subint==1)
-    {
-      fits_update_key(fptr, TSTRING, (char *)"INT_TYPE", (char *)"TIME", NULL, &status );
-      fits_update_key(fptr, TSTRING, (char *)"INT_UNIT", (char *)"SEC", NULL, &status );
-      fits_update_key(fptr, TSTRING, (char *)"SCALE", (char *)"FluxDen", NULL, &status );
-      fits_update_key(fptr, TSTRING, (char *)"POL_TYPE", (char *)"INTEN", NULL, &status );
-      fits_update_key(fptr,TINT, (char *)"NPOL",&(control->npol),NULL,&status);  
-      fits_update_key(fptr,TINT, (char *)"NBIN",&(control->nbin),NULL,&status);  
-      fits_update_key(fptr,TINT, (char *)"NBIN_PRD",&(control->nbin),NULL,&status);  
-      fits_update_key(fptr,TINT, (char *)"PHS_OFFS",&dval_0,NULL,&status);  
-      fits_update_key(fptr,TINT, (char *)"NBITS",&dval_1,NULL,&status);  
-      fits_update_key(fptr,TINT, (char *)"ZERO_OFF",&dval_0,NULL,&status);  
-      fits_update_key(fptr,TINT, (char *)"NSUBOFFS",&dval_0,NULL,&status);  
-      fits_update_key(fptr,TINT, (char *)"NCHAN",&(control->nchan),NULL,&status);  
-      fits_update_key(fptr,TDOUBLE, (char *)"CHAN_BW",&chan_bw,NULL,&status);  
-      fits_update_key(fptr,TDOUBLE, (char *)"TBIN",&tbin,NULL,&status);  
-      fits_update_key(fptr,TDOUBLE, (char *)"DM",&(control->dm),NULL,&status);  
-      fits_update_key(fptr,TINT, (char *)"RM",&dval_0,NULL,&status);  
-      fits_update_key(fptr,TINT, (char *)"NCHNOFFS",&dval_0,NULL,&status);  
-      fits_update_key(fptr,TINT, (char *)"NSBLK",&dval_1,NULL,&status);  
-      // We need to understand what this parameter really is
-      //      fits_update_key(fptr,TSTRING, (char *)"EPOCHS",(char *)"VALID",NULL,&status);  
-    }
-  // Now write the information for this new subint
+	{
+    fits_update_key(fptr, TSTRING, (char *)"INT_TYPE", (char *)"TIME", NULL, &status );
+    fits_update_key(fptr, TSTRING, (char *)"INT_UNIT", (char *)"SEC", NULL, &status );
+    fits_update_key(fptr, TSTRING, (char *)"SCALE", (char *)"FluxDen", NULL, &status );
+    fits_update_key(fptr, TSTRING, (char *)"POL_TYPE", (char *)"INTEN", NULL, &status );
+    fits_update_key(fptr,TINT, (char *)"NPOL",&(control->npol),NULL,&status);  
+    fits_update_key(fptr,TINT, (char *)"NBIN",&(control->nbin),NULL,&status);  
+    fits_update_key(fptr,TINT, (char *)"NBIN_PRD",&(control->nbin),NULL,&status);  
+    fits_update_key(fptr,TINT, (char *)"PHS_OFFS",&dval_0,NULL,&status);  
+    fits_update_key(fptr,TINT, (char *)"NBITS",&dval_1,NULL,&status);  
+    fits_update_key(fptr,TINT, (char *)"ZERO_OFF",&dval_0,NULL,&status);  
+    fits_update_key(fptr,TINT, (char *)"NSUBOFFS",&dval_0,NULL,&status);  
+    fits_update_key(fptr,TINT, (char *)"NCHAN",&(control->nchan),NULL,&status);  
+    fits_update_key(fptr,TDOUBLE, (char *)"CHAN_BW",&chan_bw,NULL,&status);  
+    fits_update_key(fptr,TDOUBLE, (char *)"TBIN",&tbin,NULL,&status);  
+    fits_update_key(fptr,TDOUBLE, (char *)"DM",&(control->dm),NULL,&status);  
+    fits_update_key(fptr,TINT, (char *)"RM",&dval_0,NULL,&status);  
+    fits_update_key(fptr,TINT, (char *)"NCHNOFFS",&dval_0,NULL,&status);  
+    fits_update_key(fptr,TINT, (char *)"NSBLK",&dval_1,NULL,&status);  
+    // We need to understand what this parameter really is
+    //      fits_update_key(fptr,TSTRING, (char *)"EPOCHS",(char *)"VALID",NULL,&status);  
+	}
+  
+	// Now write the information for this new subint
   {
     int indxval = 0;
     int nchan = control->nchan;
@@ -323,8 +323,8 @@ void writeChannels(channel *chan,controlStruct *control,fitsfile *fptr,int subin
 
 		//printf ("DAI %.10lf\n", offsSub);
     // MUST FIX
-        rajd = 69.3158537729834; // Hardcoded to 0437
-        decjd = -47.2523961499288; // Hardcoded to 0437
+    rajd = 69.3158537729834; // Hardcoded to 0437
+    decjd = -47.2523961499288; // Hardcoded to 0437
     //    rajd = 155.74168; // Hardcoded to 1022
     //    decjd = 10.03132; // Hardcoded to 1022
 
@@ -358,19 +358,19 @@ void writeChannels(channel *chan,controlStruct *control,fitsfile *fptr,int subin
     //    fits_get_colnum(fptr,CASEINSEN,"POS_ANG",&colnum,&status);
     //    fits_write_col(fptr,TDOUBLE,colnum,subint,1,1,&para,&status);
 
-  f0 = control->cFreq + fabs(control->obsBW)/2.0; // Highest frequency
+		f0 = control->cFreq + fabs(control->obsBW)/2.0; // Highest frequency
     
     for (i=0;i<nchan;i++)
-      {
-	//dat_freq[i] = f0-fabs(control->obsBW/(double)control->nchan)*i+fabs(control->obsBW/(double)control->nchan)*0.5; // Must fix
-	dat_freq[i] = f0-fabs(control->obsBW/(double)control->nchan)*i; // Must fix
-	dat_wts[i] = 1;
-      }
+		{
+			dat_freq[i] = f0-fabs(control->obsBW/(double)control->nchan)*i+fabs(control->obsBW/(double)control->nchan)*0.5; // Must fix
+			//dat_freq[i] = f0-fabs(control->obsBW/(double)control->nchan)*i; // Must fix
+			dat_wts[i] = 1;
+		}
     for (i=0;i<nchan*npol;i++)
-      {
-	dat_offs[i] = 0;
-	dat_scl[i] = 1;
-      }
+		{
+			dat_offs[i] = 0;
+			dat_scl[i] = 1;
+		}
     
     fits_get_colnum(fptr,CASEINSEN,"INDEXVAL",&colnum,&status);
     fits_report_error(stdout,status);
@@ -393,34 +393,37 @@ void writeChannels(channel *chan,controlStruct *control,fitsfile *fptr,int subin
     {
       double i_mean,i_min,i_max;
       double scaleI,offsI;
-          for (j=0;j<nchan;j++)
-	{
-	  i_mean = 0.0;
-	  for (i=0;i<nbin;i++)
-	    {
-	      if (i==0)
-		i_min = i_max = chan[j].pol[0].val[i];
-	      else
-		{
-		  if (i_min > chan[j].pol[0].val[i]) i_min = chan[j].pol[0].val[i];
-		  if (i_max < chan[j].pol[0].val[i]) i_max = chan[j].pol[0].val[i];
+    
+			for (j=0;j<nchan;j++)
+			{
+				i_mean = 0.0;
+				for (i=0;i<nbin;i++)
+				{
+					if (i==0)
+						i_min = i_max = chan[j].pol[0].val[i];
+					else
+					{
+						if (i_min > chan[j].pol[0].val[i]) i_min = chan[j].pol[0].val[i];
+						if (i_max < chan[j].pol[0].val[i]) i_max = chan[j].pol[0].val[i];
+					}
+					i_mean+=chan[j].pol[0].val[i];
+				}
+				scaleI = (i_max-i_min)/2.0/16384.0;
+				offsI = i_max - 16384.0*scaleI;
+	  
+				for (i=0;i<nbin;i++)
+					chan[j].pol[0].val[i] = (chan[j].pol[0].val[i] - offsI)/scaleI;
+				dat_scl[j] = scaleI; dat_offs[j]   = (offsI*i_mean)/(double)nbin;
+			}
 		}
-	      i_mean+=chan[j].pol[0].val[i];
-	    }
-	  scaleI = (i_max-i_min)/2.0/16384.0;
-	  offsI = i_max - 16384.0*scaleI;
-	  for (i=0;i<nbin;i++)
-	    chan[j].pol[0].val[i] = (chan[j].pol[0].val[i] - offsI)/scaleI;
-	  dat_scl[j] = scaleI; dat_offs[j]   = (offsI*i_mean)/(double)nbin;
-	}
-    }
-      //      printf("Writing %g\n",data->aa[i]);
+    
+		//      printf("Writing %g\n",data->aa[i]);
     n=0;
     for (j=0;j<nchan;j++)
-      {
-	for (i=0;i<nbin;i++)
-	  dataVals[n++] = (float)(chan[j].pol[0].val[i]);
-      }
+		{
+			for (i=0;i<nbin;i++)
+				dataVals[n++] = (float)(chan[j].pol[0].val[i]);
+		}
     printf("subint = %d, colnum = %d\n",subint,colnum);
     fits_write_col(fptr,TFLOAT,colnum,subint,1,n,dataVals,&status);
      
@@ -437,10 +440,7 @@ void writeChannels(channel *chan,controlStruct *control,fitsfile *fptr,int subin
     fits_get_colnum(fptr, CASEINSEN, "DAT_SCL", &colnum, &status);
     fits_modify_vector_len (fptr, colnum, nchan*npol, &status); 
     fits_write_col(fptr,TFLOAT,colnum,subint,1,nchan*npol,dat_scl,&status);
-
-
-  }
-  
+	}
 }
 
 void runTempo2(controlStruct *control)
@@ -978,7 +978,6 @@ double evaluateTemplate(controlStruct *control, tmplStruct *tmpl, int chan, int 
 void calculatePhaseOffset(int chan,controlStruct *control,T2Predictor pred,long double timeFromStart)
 {
   long double f0,freq,phase0,mjd0;
-	long double cPhase;  //  phase shift at the observing central frequency
   long double toff;
 
 	////////////////////////////////////////////////////////////////////
@@ -989,13 +988,12 @@ void calculatePhaseOffset(int chan,controlStruct *control,T2Predictor pred,long 
 	
   mjd0 = control->stt_imjd + (control->stt_smjd + control->stt_offs)/86400.0L + (timeFromStart + toff)/86400.0L;
   f0 = control->cFreq + fabs(control->obsBW)/2.0; // Highest frequency
-  //freq = f0 - fabs(control->obsBW/(double)control->nchan)*chan + fabs(control->obsBW/(double)control->nchan)*0.5;
-  freq = f0 - fabs(control->obsBW/(double)control->nchan)*chan;
-  cPhase = T2Predictor_GetPhase(&pred,mjd0,control->cFreq);
-  phase0 = cPhase - T2Predictor_GetPhase(&pred,mjd0,freq);
+  freq = f0 - fabs(control->obsBW/(double)control->nchan)*chan + fabs(control->obsBW/(double)control->nchan)*0.5;
+  //freq = f0 - fabs(control->obsBW/(double)control->nchan)*chan;
+  phase0 = T2Predictor_GetPhase(&pred,mjd0,freq);
   control->phaseOffset[chan] = (phase0 - floorl(phase0));
   //printf("DAI SHI: %.2Lf %.15Lf\n", freq, phase0);
-  printf("DAI SHI: %.2Lf %.15Lf\n", freq, control->phaseOffset[chan]);
+  //printf("DAI SHI: %.2Lf %.15Lf\n", freq, control->phaseOffset[chan]);
   //printf("DAI SHI: %.15Lf %.15Lf\n",mjd0,control->phaseOffset[chan]);
 }
 
@@ -1054,8 +1052,8 @@ int readObservation(FILE *fin,controlStruct *control)
 			  fscanf(fin,"%d",&(control->stt_imjd));
 			else if (strcasecmp(param,"STT_SMJD")==0)
 			  fscanf(fin,"%lf",&(control->stt_smjd));
-			//else if (strcasecmp(param,"STT_OFFS")==0)
-			//  fscanf(fin,"%lf",&(control->stt_offs));
+			else if (strcasecmp(param,"STT_OFFS")==0)
+			  fscanf(fin,"%lf",&(control->stt_offs));
 			else if (strcasecmp(param,"TSUB")==0)
 			  fscanf(fin,"%lf",&(control->tsubRequested));
 			else if (strcasecmp(param,"CFREQ")==0)
