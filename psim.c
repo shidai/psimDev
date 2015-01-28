@@ -47,10 +47,15 @@ int main(int argc,char *argv[])
   
   seed = TKsetSeed();
 
+  initialiseTemplate(&tmpl);
+  initialiseControl(&control);
+
   for (i=0;i<argc;i++)
 	{
 		if (strcmp(argv[i],"-p")==0) // Input parameters
 			strcpy(obsTable,argv[++i]);
+		else if (strcmp(argv[i],"-bat")==0) // Input parameters
+			control.bat = 1;
 	}
   
   if (!(fin = fopen(obsTable,"r")))
@@ -58,9 +63,6 @@ int main(int argc,char *argv[])
     printf("Unable to open observation table: %s\n",obsTable);
     exit(1);
   }
-
-  initialiseTemplate(&tmpl);
-  initialiseControl(&control);
 
   while (endit==0)
 	{
@@ -456,11 +458,16 @@ void runTempo2(controlStruct *control)
   long double mjd1 = control->stt_imjd + control->stt_smjd/86400.0L - 60*60/86400.0L; // MUST FIX
   long double mjd2 = control->stt_imjd + control->stt_smjd/86400.0L + (control->nsub)*control->tsubRequested/86400.0 + 60*60/86400.0L; // MUST FIX
 
-  //  sprintf(execString,"tempo2 -pred \"PKS %Lf %Lf %g %g %d %d %g\" -f %s",mjd1,mjd2,freq1,freq2,ntimecoeff,nfreqcoeff,seg_length,control->exact_ephemeris);
-  sprintf(execString,"tempo2 -pred \"%s %Lf %Lf %g %g %d %d %g\" -f %s","PKS",mjd1,mjd2,freq1,freq2,ntimecoeff,nfreqcoeff,seg_length,control->exact_ephemeris);
-  //sprintf(execString,"tempo2 -pred \"%s %Lf %Lf %g %g %d %d %g\" -f %s","BAT",mjd1,mjd2,freq1,freq2,ntimecoeff,nfreqcoeff,seg_length,control->exact_ephemeris);
-  //sprintf(execString,"tempo2-dev -pred \"PKS %Lf %Lf %g %g %d %d %g\" -f %s",mjd1,mjd2,freq1,freq2,ntimecoeff,nfreqcoeff,seg_length,control->exact_ephemeris);
+	if (control->bat == 1)
+	{
+		sprintf(execString,"tempo2 -pred \"%s %Lf %Lf %g %g %d %d %g\" -f %s","BAT",mjd1,mjd2,freq1,freq2,ntimecoeff,nfreqcoeff,seg_length,control->exact_ephemeris);
+	}
+	else
+	{
+		sprintf(execString,"tempo2 -pred \"%s %Lf %Lf %g %g %d %d %g\" -f %s","PKS",mjd1,mjd2,freq1,freq2,ntimecoeff,nfreqcoeff,seg_length,control->exact_ephemeris);
+	}
   printf("Running tempo2 to get predictor\n");
+
   system(execString);
   printf("Complete running tempo2\n");
 }
@@ -1161,6 +1168,8 @@ void initialiseControl(controlStruct *control)
   control->cFlux = 0.0;
   control->si = 0.0;
   control->radioNoise = 0.0;
+	
+	control->bat = 0;
   // Note that the DM comes from the ephemeris
 }
 

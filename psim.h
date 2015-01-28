@@ -104,6 +104,7 @@ typedef struct controlStruct {
   double scint_freqbw;
   double scint_ts;
 
+	int bat;  // default: bat = 0, simulate at the observatory
   // Automatically calculated
   long double period;
   long double *phaseOffset;
