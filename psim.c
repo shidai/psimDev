@@ -11,7 +11,7 @@
 
 int main(int argc,char *argv[])
 {
-  T2Predictor pred;
+  T2Predictor pred, predBat;
   channel *chan;
   controlStruct control;
   int nPhaseBins=1024;
@@ -54,8 +54,6 @@ int main(int argc,char *argv[])
 	{
 		if (strcmp(argv[i],"-p")==0) // Input parameters
 			strcpy(obsTable,argv[++i]);
-		else if (strcmp(argv[i],"-bat")==0) // Input parameters
-			control.bat = 1;
 	}
   
   if (!(fin = fopen(obsTable,"r")))
@@ -105,6 +103,16 @@ int main(int argc,char *argv[])
 			exit(1);
 		}
       
+		// predictor at SSB
+		control.bat = 1;
+    T2Predictor_Init(&predBat);
+    runTempo2(&control);
+    if (ret=T2Predictor_Read(&predBat,(char *)"t2pred.dat"))
+		{
+			printf("Error: unable to read predictor\n");
+			exit(1);
+		}
+
 		// calculate the dynamic spectrum
 
 		if (control.scint_ts > 0)
@@ -121,6 +129,7 @@ int main(int argc,char *argv[])
 		{
 			// Calculate period for this subint
 			calculatePeriod(&control,pred,timeFromStart);
+			calculateBatPeriod(&control,predBat,timeFromStart);
 
 			// Calculate phase offset for each channel
 	  	for (j=0;j<control.nchan;j++)
@@ -166,6 +175,7 @@ int main(int argc,char *argv[])
 		}
 		fits_close_file(fptr,&status);
     T2Predictor_Destroy(&pred);
+    T2Predictor_Destroy(&predBat);
 
     // Deallocate memory
     free(control.phaseOffset);
@@ -280,6 +290,9 @@ void writeChannels(channel *chan,controlStruct *control,fitsfile *fptr,int subin
   fits_update_key(fptr, TINT, (char *)"NAXIS2", &subint, NULL, &status );
   if (status) {fits_report_error(stdout,status); exit(1);}
   
+	int ncol;
+	fits_get_num_cols(fptr,&ncol,&status);
+
   if (subint==1)
 	{
     fits_update_key(fptr, TSTRING, (char *)"INT_TYPE", (char *)"TIME", NULL, &status );
@@ -300,6 +313,8 @@ void writeChannels(channel *chan,controlStruct *control,fitsfile *fptr,int subin
     fits_update_key(fptr,TINT, (char *)"RM",&dval_0,NULL,&status);  
     fits_update_key(fptr,TINT, (char *)"NCHNOFFS",&dval_0,NULL,&status);  
     fits_update_key(fptr,TINT, (char *)"NSBLK",&dval_1,NULL,&status);  
+
+    fits_insert_col(fptr,ncol+1,"BATFREQ",(char *)"D",&status);
     // We need to understand what this parameter really is
     //      fits_update_key(fptr,TSTRING, (char *)"EPOCHS",(char *)"VALID",NULL,&status);  
 	}
@@ -322,6 +337,7 @@ void writeChannels(channel *chan,controlStruct *control,fitsfile *fptr,int subin
     //double offsSub = (double)timeFromStart+tsub/2.0; // This should be offset from start of subint centre
     int i,j,n;
     float dataVals[nchan*nbin];
+		double batFreq = control->batFreq;
 
 		//printf ("DAI %.10lf\n", offsSub);
     // MUST FIX
@@ -336,6 +352,16 @@ void writeChannels(channel *chan,controlStruct *control,fitsfile *fptr,int subin
     //    lst_sub = (double)calcLocalSiderealTime(mjd,data)*60.0*60.0;
     //    fits_get_colnum(fptr,CASEINSEN,"LST_SUB",&colnum,&status);
     //    fits_write_col(fptr,TDOUBLE,colnum,subint,1,1,&lst_sub,&status);
+
+		//double CbatFreq;
+		//if (subint == ceil(control->nsub/2))
+		//{
+		//	CbatFreq = control->CbatFreq;
+		//	fits_write_key(fptr,TDOUBLE, (char *)"CBATFREQ",&CbatFreq,NULL,&status);  
+		//}
+
+    fits_get_colnum(fptr,CASEINSEN,"BATFREQ",&colnum,&status);
+    fits_write_col(fptr,TDOUBLE,colnum,subint,1,1,&batFreq,&status);
 
     fits_get_colnum(fptr,CASEINSEN,"TSUBINT",&colnum,&status);
     fits_write_col(fptr,TDOUBLE,colnum,subint,1,1,&tsub,&status);
@@ -364,7 +390,7 @@ void writeChannels(channel *chan,controlStruct *control,fitsfile *fptr,int subin
     
     for (i=0;i<nchan;i++)
 		{
-			dat_freq[i] = f0-fabs(control->obsBW/(double)control->nchan)*i+fabs(control->obsBW/(double)control->nchan)*0.5; // Must fix
+			dat_freq[i] = f0-fabs(control->obsBW/(double)control->nchan)*i-fabs(control->obsBW/(double)control->nchan)*0.5; // Must fix
 			//dat_freq[i] = f0-fabs(control->obsBW/(double)control->nchan)*i; // Must fix
 			dat_wts[i] = 1;
 		}
@@ -556,6 +582,23 @@ void calculateStt_offs(controlStruct *control, T2Predictor pred)
   //control->stt_offs = (phase0 - floorl(phase0))*control->period;
   control->stt_offs = (ceill(phase0) - phase0)*control->period;
 	//printf("Here with %g %g %g %g\n",(double)freq,(double)mjd0,(double)control->period,(double)control->tsub);
+}
+
+void calculateBatPeriod(controlStruct *control, T2Predictor pred, long double timeFromStart)
+{
+  long double mjd0;
+  long double freq;
+  long double toff;
+
+  freq = control->cFreq;
+  toff = (int)(control->tsub/2.0/control->period+0.5)*control->period;
+  mjd0 = control->stt_imjd + (control->stt_smjd + control->stt_offs)/86400.0L + (timeFromStart + toff)/86400.0L; // Centre of subint
+  control->batFreq = T2Predictor_GetFrequency(&pred,mjd0,freq);
+
+	//if (nsub == control->nsub/2)
+	//{
+	//	control->CbatFreq = control->batFreq;
+	//}
 }
 
 void calculatePeriod(controlStruct *control, T2Predictor pred, long double timeFromStart)
@@ -995,7 +1038,7 @@ void calculatePhaseOffset(int chan,controlStruct *control,T2Predictor pred,long 
 	
   mjd0 = control->stt_imjd + (control->stt_smjd + control->stt_offs)/86400.0L + (timeFromStart + toff)/86400.0L;
   f0 = control->cFreq + fabs(control->obsBW)/2.0; // Highest frequency
-  freq = f0 - fabs(control->obsBW/(double)control->nchan)*chan + fabs(control->obsBW/(double)control->nchan)*0.5;
+  freq = f0 - fabs(control->obsBW/(double)control->nchan)*chan - fabs(control->obsBW/(double)control->nchan)*0.5;
   //freq = f0 - fabs(control->obsBW/(double)control->nchan)*chan;
   phase0 = T2Predictor_GetPhase(&pred,mjd0,freq);
   control->phaseOffset[chan] = (phase0 - floorl(phase0));
@@ -1096,6 +1139,8 @@ int readObservation(FILE *fin,controlStruct *control)
 		}
 	} while (endit==0);
 
+	control->bat = 0; // default
+	control->CbatFreq = 0.0; // default
 	//////////////////////////////////////////////////////////////////////
   f0 = control->cFreq + fabs(control->obsBW)/2.0; // Highest frequency
 	control->flux = (double *)malloc(sizeof(double)*control->nchan);
@@ -1112,7 +1157,7 @@ int readObservation(FILE *fin,controlStruct *control)
 		printf ("cFlux and spectral index not provided!\n");
 		for (i = 0; i < control->nchan; i++)
 		{
-			control->flux[i] = 1000.0;
+			control->flux[i] = control->cFlux;
 		}
 	}
 

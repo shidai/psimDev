@@ -107,6 +107,8 @@ typedef struct controlStruct {
 	int bat;  // default: bat = 0, simulate at the observatory
   // Automatically calculated
   long double period;
+  long double batFreq; // pulse frequency at SSB 
+  long double CbatFreq; // pulse frequency of the obs at SSB 
   long double *phaseOffset;
 } controlStruct;
 
@@ -147,6 +149,7 @@ void runTempo2(controlStruct *control);
 void writePredictor(fitsfile *fptr,char *fname);
 void writeEphemeris(fitsfile *fptr,controlStruct *control);
 void calculatePeriod(controlStruct *control, T2Predictor pred, long double timeFromStart);
+void calculateBatPeriod(controlStruct *control, T2Predictor pred, long double timeFromStart);
 void calculateStt_offs(controlStruct *control, T2Predictor pred);
 //double evaluateTemplate(controlStruct *control,int chan,int pol,int bin);
 void calculatePhaseOffset(int chan,controlStruct *control,T2Predictor pred,long double timeFromStart);
