@@ -1032,8 +1032,8 @@ void calculatePhaseOffset(int chan,controlStruct *control,T2Predictor pred,long 
 
 	////////////////////////////////////////////////////////////////////
 	// Need to understand this
-  //toff = (int)(control->tsub/2.0/control->period+0.5)*control->period;
-	toff = 0.0;
+  toff = (int)(control->tsub/2.0/control->period+0.5)*control->period;
+	//toff = 0.0;
 	////////////////////////////////////////////////////////////////////
 	
   mjd0 = control->stt_imjd + (control->stt_smjd + control->stt_offs)/86400.0L + (timeFromStart + toff)/86400.0L;
