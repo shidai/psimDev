@@ -14,7 +14,7 @@ int main(int argc,char *argv[])
   T2Predictor pred, predBat;
   channel *chan;
   controlStruct control;
-  int nPhaseBins=1024;
+  int nPhaseBins;
   int i,j,k,l;
   int ret;
   long seed;
@@ -35,15 +35,9 @@ int main(int argc,char *argv[])
   tmplStruct tmpl;
   double scintScale=1.0;
 	acfStruct acfStructure; // dynamical spectrum
-  //float **scint;
-  //int setScint=0;
-  //int nx=16384;
-  //int ny=2048;
-  //int ny=1024;
-  
-  //scint = (float **)malloc(sizeof(float *)*ny);
-  //for (i=0;i<ny;i++)
-  //  scint[i] = (float *)malloc(sizeof(float)*nx);      
+
+	double *phaseResolvedSI; 
+  phaseSI *SIrotated;
   
   seed = TKsetSeed();
 
@@ -77,6 +71,7 @@ int main(int argc,char *argv[])
 		puts(control.fname);
 		// Allocate memory
    
+		nPhaseBins = control.nbin;
 		control.phaseOffset = (long double *)malloc(sizeof(long double)*control.nchan); 
     chan = (channel *)malloc(sizeof(channel)*control.nchan);
     for (i=0;i<control.nchan;i++)
@@ -120,6 +115,20 @@ int main(int argc,char *argv[])
 			calculateScintScale (&acfStructure, &control);
 		}
 
+		// read phase-resolved spectral index
+		phaseResolvedSI = (double *)malloc(sizeof(double)*nPhaseBins);
+    SIrotated = (phaseSI *)malloc(sizeof(phaseSI)*control.nchan);
+    for (i=0;i<control.nchan;i++)
+		{
+			SIrotated[i].nbin = control.nbin;
+	  	SIrotated[i].val = (double *)malloc(sizeof(double)*control.nbin);
+		}
+      
+		if (control.simProf != 0)
+		{
+			readSI(&control, phaseResolvedSI);
+		}
+
 		// calculate stt_offs
 		//calculateStt_offs(&control, pred);
 
@@ -135,6 +144,14 @@ int main(int argc,char *argv[])
 	  	for (j=0;j<control.nchan;j++)
 	    {
 				calculatePhaseOffset(j,&control,pred,timeFromStart);
+			}
+
+			if (control.simProf != 0)
+			{
+				for (j=0;j<control.nchan;j++)
+				{
+					rotateSI (phaseResolvedSI, nPhaseBins, control.phaseOffset[j], SIrotated[j].val);
+				}
 			}
 
 	  	//printf("period = %g\n",(double)control.period);
@@ -154,7 +171,14 @@ int main(int argc,char *argv[])
 				tempFlux = 0.0;
 				for (l=0;l<nPhaseBins;l++)
 				{
-					tempFlux += evaluateTemplate(&control,&tmpl,j,0,l);
+					if (control.simProf == 0)
+					{
+						tempFlux += evaluateTemplate(&control,&tmpl,j,0,l);
+					}
+					else
+					{
+						tempFlux += simTemplate(&control,&tmpl,SIrotated[j].val[l],j,0,l);
+					}
 				}
 				tempFlux = tempFlux/nPhaseBins;
 
@@ -162,10 +186,18 @@ int main(int argc,char *argv[])
 				{
 					for (l=0;l<nPhaseBins;l++)
 					{
-						//chan[j].pol[k].val[l] = control.whiteLevel*TKgaussDev(&seed);
-		      	//chan[j].pol[k].val[l] += scintScale*evaluateTemplate(&control,&tmpl,j,k,l);
-		      	chan[j].pol[k].val[l] = scintScale*evaluateTemplate(&control,&tmpl,j,k,l)*control.flux[j]/tempFlux + control.radioNoise*TKgaussDev(&seed);
-		      	//printf ("%lf\n",evaluateTemplate(&control,&tmpl,j,k,l));
+						if (control.simProf == 0)
+						{
+							//chan[j].pol[k].val[l] = control.whiteLevel*TKgaussDev(&seed);
+							//chan[j].pol[k].val[l] += scintScale*evaluateTemplate(&control,&tmpl,j,k,l);
+							//chan[j].pol[k].val[l] = scintScale*evaluateTemplate(&control,&tmpl,j,k,l)*control.flux[j]/tempFlux + control.radioNoise*TKgaussDev(&seed);
+							chan[j].pol[k].val[l] = scintScale*evaluateTemplate(&control,&tmpl,j,k,l)*control.flux[j]/tempFlux + control.radioNoise*TKgaussDev(&seed);
+							//printf ("%lf\n",evaluateTemplate(&control,&tmpl,j,k,l));
+						}
+						else
+						{
+							chan[j].pol[k].val[l] = scintScale*simTemplate(&control,&tmpl,SIrotated[j].val[l],j,k,l)*control.flux[j]/tempFlux + control.radioNoise*TKgaussDev(&seed);
+						}
 					}
 				}
 			}
@@ -187,11 +219,37 @@ int main(int argc,char *argv[])
 		}
       
 		free(chan);
+		free(phaseResolvedSI);
+		free(SIrotated);
 	}
   
 	deallocateMemory (&acfStructure);
 	fclose(fin);
   // Should deallocate the memory
+}
+
+int readSI(controlStruct *control, double *phaseResolvedSI)
+{
+	FILE *fp;
+	int i;
+	double tmp;
+
+	if ((fp = fopen(control->phaseResolvedSI,"r")) == NULL)
+	{
+		printf ("No phase-resolved spectral index!\n");
+		exit(1);
+	}
+
+	i = 0;
+	while (fscanf(fp, "%lf %lf %lf", &tmp, &phaseResolvedSI[i], &tmp) == 3)
+	{
+		i++;
+	}
+
+	if (fclose(fp) != 0)
+		printf ("Can not close phase-resolved spectral index!\n");
+
+	return 0;
 }
 
 void createFitsFile(fitsfile *fptr,controlStruct *control)
@@ -998,17 +1056,37 @@ double evaluateTemplateComponent(tmplStruct *tmpl,double phi,int chan,int stokes
   return result;
 }
 
-/*
-double evaluateTemplate(controlStruct *control,int chan,int pol,int bin)
+// Simulate a single template component
+double simTemplateComponent(tmplStruct *tmpl, double freq, double SI, double phi,int chan,int stokes,int comp,double phiRot)
 {
-  double val=0.0;
-  double centre = 0.4;
-  double height = 3;
-  double conc = 40;
-  val = height*exp(conc*(cos((bin/(double)control->nbin+control->phaseOffset[chan]-centre)*2*M_PI)-1));
-  return val;
+  double result=0;
+  //result = tmpl->channel[chan].pol[stokes].comp[comp].height *
+  int k;
+  for (k=0;k<tmpl->channel[chan].pol[stokes].comp[comp].nVm;k++)
+  	result += (tmpl->channel[chan].pol[stokes].comp[comp].vonMises[k].height)*pow(freq/1400.0,SI) *
+    	exp(tmpl->channel[chan].pol[stokes].comp[comp].vonMises[k].concentration*
+	(cos((phi - tmpl->channel[chan].pol[stokes].comp[comp].vonMises[k].centroid + phiRot)*2*M_PI)-1));
+  return result;
 }
-*/
+
+// Simulate a given frequency channel and polarisation
+double simTemplate(controlStruct *control, tmplStruct *tmpl, double SI, int chan, int pol, int bin)
+{
+  int tChan = (int)(chan*tmpl->nchan/control->nchan);
+
+	double f0, freq;
+  f0 = control->cFreq + fabs(control->obsBW)/2.0; // Highest frequency
+  freq = f0 - fabs(control->obsBW/(double)control->nchan)*chan - fabs(control->obsBW/(double)control->nchan)*0.5;
+
+  double result=0;
+  int k;
+  for (k=0;k<tmpl->channel[tChan].pol[pol].nComp;k++)
+    {
+      //result += evaluateTemplateComponent(tmpl,bin/(double)control->nbin,tChan,pol,k,0.0);
+      result += simTemplateComponent(tmpl,freq,SI,bin/(double)control->nbin,tChan,pol,k,control->phaseOffset[chan]);
+    }
+  return result;
+}
 
 // Evaluate a given frequency channel and polarisation
 double evaluateTemplate(controlStruct *control, tmplStruct *tmpl, int chan, int pol, int bin)
@@ -1136,6 +1214,11 @@ int readObservation(FILE *fin,controlStruct *control)
 			  fscanf(fin,"%lf",&(control->cFlux));
 			else if (strcasecmp(param,"SI")==0)
 				fscanf(fin,"%lf",&(control->si));
+			else if (strcasecmp(param,"phaseResolvedSI")==0)
+			{
+				fscanf(fin,"%s",control->phaseResolvedSI);
+				control->simProf = 1;
+			}
 		}
 	} while (endit==0);
 
@@ -1215,132 +1298,205 @@ void initialiseControl(controlStruct *control)
   control->radioNoise = 0.0;
 	
 	control->bat = 0;
+	
+	control->simProf = 0; // default: do not simulate profile with phase-resolved SI
   // Note that the DM comes from the ephemeris
 }
 
-/*
-double calculateScintScale(controlStruct *control,int chan,long double timeFromStart,int sub,long int *seed,float **scint,int *setScint)
+int dft_profiles (int N, double *in, fftw_complex *out)
+// dft of profiles
 {
-  double simFlux=0,fc;
-  double boxX,boxY0,dt,ratio,ratio2,rf,sdiff,f2;
-  double f0,f1,dstep,scint_ts_f,scint_freqbw_f;
-  double tint = control->tsub;
-  int nx=16384;
-  int k2,l,nc;
-  static int xs=0;
-  double scint_ts_f0,fa,fb;
-  int fend;
-  printf("In scint\n");
-  if (*setScint == 0)
-    {
-      int nx=16384;
-      //int ny=2048;
-      int ny=1024;
-      FILE *fin;
-      float *flt;
-      int i,j;
+	//  dft of profiles 
+	///////////////////////////////////////////////////////////////////////
+	
+	//printf ("%lf\n", in[0]);
+	//double *in;
+	//fftw_complex *out;
+	fftw_plan p;
+	
+	//in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
+	//out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
+	p = fftw_plan_dft_r2c_1d(N, in, out, FFTW_MEASURE);
 
-      flt = (float *)malloc(sizeof(float)*nx*2); // Read in real and imaginary parts of the e-field       
-      *setScint=1;
-      // Read the file
-      if (!(fin = fopen("strong10w.spe","rb")))
-	{
-	  printf("Unable to read scintillation file: strong10w.spe\n");
-	  exit(1);
-	}
-      // Read header information
-      fread(flt,sizeof(float),nx*2,fin);  
-      for (j=0;j<ny;j++)
-	{  
-	  fread(flt,sizeof(float),nx*2,fin);  
-	  for (i=0;i<nx;i++)
-	    {
-	      scint[j][i] = pow(flt[2*i],2)+pow(flt[2*i+1],2);
-	    }
-	}
-      fclose(fin);
-      free(flt);
-    }
-  printf("Set up scint\n");
-  f0 = control->cFreq + fabs(control->obsBW)/2.0; // Highest frequency
-  //fc = f0 - fabs(control->obsBW/(double)control->nchan)*chan + fabs(control->obsBW/(double)control->nchan)*0.5;
-  fc = f0 - fabs(control->obsBW/(double)control->nchan)*chan;
-  printf("fc = %g\n",fc);
-  // Simulation parameters
-  rf = 20;
-  sdiff = 4.3;  // sdiff = rf*0.215
-  
-  // Deal with scintillation
-  scint_ts_f     = control->scint_ts*pow(fc/1440,1.2); // 1440 is fixed from the simulation
-  //scint_freqbw_f = control->scint_freqbw*pow(fc/1440,-4.4); 
-  scint_freqbw_f = control->scint_freqbw*pow(fc/1440,4.4); 
-  ratio = pow(rf/sdiff,2);
-  //	  ratio2 = fc*1e6/data->scint_freqbw; 
-  ratio2 = fc*1e6/scint_freqbw_f;  // JUST PUT THIS IN
-  f2 = pow(10,log10(ratio2/ratio)/(-3.4));
-  printf("f2 %g\n",f2);
-  
-  //	  scint_ts_f0 = data->scint_ts*pow(1440/f2/1440,1.2); // This is crazy?? MUST FIX
-  scint_ts_f0 = scint_ts_f*pow(1.0/f2,1.2); //*pow(1440/f2/1440,1.2); // This is crazy?? MUST FIX
-  printf("scint_ts %g %g\n",scint_ts_f,scint_ts_f0);
-  //	  dt = scint_ts_f0/sdiff;
-  dt = scint_ts_f0/sdiff;
-  boxX = tint/dt;
-  //scint_ts_f     = control->scint_ts*pow(fc/1440,1.2); // 1440 is fixed from the simulation
+	fftw_execute(p);
 
-  printf("boxX = %g %g %g\n",boxX,tint,dt);
-  //		  printf("dt %g %g %g %g %g %g %g\n",dt,scint_ts_f0,sdiff,f2,ratio2,ratio,data->scint_freqbw); 
-  // Now find correct section in the simulation for the particular receiver band
-  fa = f2*(fc-fabs(control->obsBW/(double)control->nchan))/1440.0; // Measurements made at 1.4GHz
-  fb = f2*(fc)/1440;
-  if (fa > 1.6) fa = 1.6; // Limit of simulation
-  if (fa < 0.4) 
-    {
-      fb = 0.4+(fb-fa);
-      fa = 0.4;
-    }
+	fftw_destroy_plan(p);
+	//fftw_free(in); 
+	//fftw_free(out);
   
-  if (fb > 1.6) fb = 1.6; // Limit of simulation
-  dstep = (1.6-0.4)/1024.0;
-  if (sub==0 && chan==0)
-    {
-      xs = (int)(TKranDev(seed)*(nx)); //-3*86400.0/dt)); // Must fix
-      printf("START Steps = %d %d %g\n",xs,nx,3*86400.0/dt);
-    }
-  else if (chan==0)
-    xs = (int)(xs+control->tsub/dt+0.5);
-  printf("timeFromStart = %d %Lg\n",xs,timeFromStart);
-  //  printf("xs = %d dxs = %d fa = %g fb = %g dstep = %g %g\n",xs,(int)((1-1)*control->tsub/dt+0.5),fa,fb,dstep,(fb-0.4)/dstep);
-
-  nc=0;
-  simFlux=0;
-  fend = (int)((fb-0.4)/dstep+1e-6); // There's a rounding issue here. Therefore increase the value slightly
-  if (fend >= 1024) {printf("WARNING: Edge of scintillation matrix\n"); fend=1023;}
-  if (chan==0)
-    printf("Steps %g %g %d %d %d %d (%d)\n",(double)timeFromStart,dt,(int)xs,(int)(xs+boxX),(int)((fa-0.4)/dstep),fend,(int)boxX);
-  if (boxX < 1) boxX = 1;
-  for (k2=(int)xs;k2<(int)(xs+boxX);k2++)
-    {
-      
-      for (l=(int)((fa-0.4)/dstep);l<=fend;l++)
-	{
-	  //	  printf("Calculation %.10f %.5f\n",(double)dstep,(double)(fb-0.4)/(dstep));
-	  //	  printf("Processing %d %d %.5f >%g< %.5f %g\n",l,k2,fb,dstep,(double)(((long double)fb-0.4L)/(long double)dstep),boxX);
-	  simFlux+=scint[l][k2]; // Should think carefully about this averaging
-	  nc++;
-	  //	  printf("Done process: %d %g %g\n",nc,scint[l][k2],simFlux);
-	  
-	}
-    }
-  if (nc == 0)
-    {
-      printf("SHOULD NEVER GET HERE %g %g %g %g %g %g\n",fa,fb,(fa-0.4)/dstep,(fb-0.4)/dstep,xs,boxX);
-      exit(1);
-    }
-  
-  simFlux/=(double)nc;
-  
-  printf("simFlux = %g %d\n",simFlux,nc);
-  return simFlux;
+	return 0;
 }
-*/
+
+int rotate (int N, double *real_p, double *real_p_rotate, double *ima_p, double *ima_p_rotate, double rot)
+{
+	// k is the dimention of amp, N is the dimention of s
+	int i;
+
+	// for substraction 
+	double amp,cosina,sina;
+	for (i=0;i<N/2+1;i++)
+	{
+		// calculate the sin(phi) and cos(phi) of the profile
+		amp=sqrt(real_p[i]*real_p[i]+ima_p[i]*ima_p[i]);
+		cosina=real_p[i]/amp;
+		sina=ima_p[i]/amp;
+
+		// rotate profile
+		real_p_rotate[i]=amp*(cosina*cos(-i*rot*2*M_PI)-sina*sin(-i*rot*2*M_PI));
+		ima_p_rotate[i]=amp*(sina*cos(-i*rot*2*M_PI)+cosina*sin(-i*rot*2*M_PI));
+		//real_p_rotate[i]=amp*(cosina*cos(-i*pi)-sina*sin(-i*pi));
+		//ima_p_rotate[i]=amp*(sina*cos(-i*pi)+cosina*sin(-i*pi));
+		
+	}
+
+	return 0;
+}
+
+int inverse_dft (double *real_p, double *ima_p, int ncount, double *p_new)
+{
+	double *dp;
+	fftw_plan plan;
+	fftw_complex *cp;
+
+	dp = (double *)malloc(sizeof (double) * ncount);
+	cp = (fftw_complex *)fftw_malloc(sizeof (fftw_complex) * ncount);
+	memset(dp, 0, sizeof (double) * ncount);
+	memset(cp, 0, sizeof (fftw_complex) * ncount);
+
+	// initialize the dft...
+	double *dp_t;
+	fftw_plan plan_t;
+	fftw_complex *cp_t;
+
+	dp_t = (double *)malloc(sizeof (double) * ncount);
+	cp_t = (fftw_complex *)fftw_malloc(sizeof (fftw_complex) * ncount);
+	memset(dp_t, 0, sizeof (double) * ncount);
+	memset(cp_t, 0, sizeof (fftw_complex) * ncount);
+
+	int i;
+	double real,ima,amp,cosina,sina;
+
+	for (i = 0; i < ncount; i++)
+	{
+		if (i < ncount/2+1)
+		{
+			real = real_p[i];
+			ima = ima_p[i];
+			amp = sqrt(real*real+ima*ima);
+			cosina = real/amp;
+			sina = ima/amp;
+
+			cp[i][0] = amp*(cosina);
+			cp[i][1] = amp*(sina);
+			//cp[i][0] = amp*(cosina*cos(-i*3.1415926)-sina*sin(-i*3.1415926));
+			//cp[i][1] = amp*(sina*cos(-i*3.1415926)+cosina*sin(-i*3.1415926));
+			//cp[i][0]=real_s[i]-real_p[i];
+			//cp[i][1]=ima_s[i]-ima_p[i];
+			//cp[i][0]=-real_s[i]+real_p[i];
+			//cp[i][1]=-ima_s[i]+ima_p[i];
+			cp_t[i][0] = real_p[i];
+			cp_t[i][1] = ima_p[i];
+			//cp[i][0]=real_p[i];
+			//cp[i][1]=ima_p[i];
+		}
+		else
+		{
+			cp[i][0]=0.0;
+			cp[i][1]=0.0;
+			cp_t[i][0]=0.0;
+			cp_t[i][1]=0.0;
+		}
+	}
+
+  plan_t = fftw_plan_dft_c2r_1d(ncount, cp_t, dp_t, FFTW_MEASURE);
+
+  fftw_execute(plan_t);
+
+  fftw_destroy_plan(plan_t);
+
+	///////////////////////////////////////////////////////////////
+
+  plan = fftw_plan_dft_c2r_1d(ncount, cp, dp, FFTW_MEASURE);
+
+  fftw_execute(plan);
+
+  fftw_destroy_plan(plan);
+
+	for (i = 0; i < ncount; i++)
+	{
+		p_new[i] = dp[i]/ncount;  // normalized by the ncount
+		//printf ("%lf\n", p_new[i]);
+	}
+
+	return 0;
+}
+
+int rotateSI (double *s, int nphase, double rot, double *sOut)
+{
+	//int nphase=1024;
+	int nchn=1;
+
+	// dft 
+	double s_real[nphase], s_ima[nphase];
+	preRot (s, nphase, nchn, s_real, s_ima);
+
+	// rotate the profile by pi
+	double real_s_rotate[nphase/2+1], ima_s_rotate[nphase/2+1];
+	rotate (nphase, s_real, real_s_rotate, s_ima, ima_s_rotate, rot);
+
+	inverse_dft (real_s_rotate, ima_s_rotate, nphase, sOut);
+
+	//printf ("%.8lf %.8lf %.8lf %.8lf %.8lf\n", sigma_I, sigma_Q, sigma_U, sigma_V, sigma_L);
+
+	return 0;
+}
+
+int preRot (double *p, int nphase, int nchn, double *real_p, double *ima_p)
+{
+	// nphase is the dimention of one profile, nchn is number of profiles
+	int i,j;
+	
+	/////////////////////////////////////////////////////////////////////////////////
+	double test[nphase];  
+
+	for (i=0;i<nphase;i++)
+	{
+		test[i]=p[i];
+	}
+	fftw_complex *out_t;
+	out_t = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * nphase);
+	dft_profiles(nphase,test,out_t);
+	//////////////////////////////////////////////////////////////////////////////
+
+	fftw_complex *out_p;
+	
+	out_p = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * nphase);
+	
+	double p_temp[nphase];  // store one template and profile
+
+	for (i = 0; i < nchn; i++)
+	{
+	    for (j=0;j<nphase;j++)
+	    {
+		    p_temp[j]=p[i*nphase + j];
+	    }
+
+	    dft_profiles(nphase,p_temp,out_p);
+
+	    //double amp_s[N/2],phi_s[N/2];
+	    //double amp_p[N/2],phi_p[N/2];
+
+		for (j = 0; j < nphase/2+1; j++)                                                  
+		{                                                                      
+			real_p[j]=out_p[j][0];                                             
+			ima_p[j]=out_p[j][1];                                              
+		}
+										
+	}
+
+	fftw_free(out_p); 
+	fftw_free(out_t); 
+
+	return 0;
+}
+

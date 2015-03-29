@@ -68,6 +68,11 @@ typedef struct channel {
   int npol;
 } channel;
 
+typedef struct phaseSI {
+  double *val; 
+  int nbin;
+} phaseSI;
+
 typedef struct controlStruct {
   char  template[1024];
   char  primaryHeaderParams[1024]; // Filename of file containing primary header parameters
@@ -110,6 +115,9 @@ typedef struct controlStruct {
   long double batFreq; // pulse frequency at SSB 
   long double CbatFreq; // pulse frequency of the obs at SSB 
   long double *phaseOffset;
+
+	int simProf;  // default: do not simulate profile with phase-resolved SI
+	char phaseResolvedSI[1024];
 } controlStruct;
 
 typedef struct acfStruct {
@@ -156,3 +164,13 @@ void calculatePhaseOffset(int chan,controlStruct *control,T2Predictor pred,long 
 int readObservation(FILE *fin,controlStruct *control);
 void initialiseControl(controlStruct *control);
 //double calculateScintScale(controlStruct *control,int chan,long double timeFromStart,int sub,long int *seed,float **scint,int *setScint);
+
+double simTemplateComponent(tmplStruct *tmpl, double freq, double SI, double phi,int chan,int stokes,int comp,double phiRot);
+double simTemplate(controlStruct *control, tmplStruct *tmpl, double SI, int chan, int pol, int bin);
+int readSI(controlStruct *control, double *phaseResolvedSI);
+
+int dft_profiles (int N, double *in, fftw_complex *out);
+int rotate (int N, double *real_p, double *real_p_rotate, double *ima_p, double *ima_p_rotate, double rot);
+int inverse_dft (double *real_p, double *ima_p, int ncount, double *p_new);
+int rotateSI (double *s, int nphase, double rot, double *sOut);
+int preRot (double *p, int nphase, int nchn, double *real_p, double *ima_p);
