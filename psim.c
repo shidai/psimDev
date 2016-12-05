@@ -202,6 +202,11 @@ int main(int argc,char *argv[])
 				}
 			}
 	  
+			if (control.scatter_ts != 0.0)
+			{
+				simScatter (chan, &control);
+			}
+
 			writeChannels(chan,&control,fptr,i+1,timeFromStart);
 			timeFromStart += control.tsub;
 		}
@@ -1170,6 +1175,8 @@ int readObservation(FILE *fin,controlStruct *control)
 			  fscanf(fin,"%s",control->template);
 			else if (strcasecmp(param,"SCINT_TS")==0)
 			  fscanf(fin,"%lf",&(control->scint_ts));
+			else if (strcasecmp(param,"SCATTER_TS")==0)
+			  fscanf(fin,"%lf",&(control->scatter_ts));
 			else if (strcasecmp(param,"SCINT_FREQBW")==0)
 			  fscanf(fin,"%lf",&(control->scint_freqbw));	  
 			else if (strcasecmp(param,"FILE")==0)
@@ -1245,11 +1252,11 @@ int readObservation(FILE *fin,controlStruct *control)
 	}
 
 	//////////////////////////////////////////////////////////////////////
-	if (control->tsys != 0.0 && control->tsky != 0.0 && control->gain != 0.0 && control->whiteLevel == 0)
+	if (control->tsys != 0.0 && control->tsky != 0.0 && control->gain != 0.0)
 	{
 		control->radioNoise = (control->tsys+control->tsky)/(control->gain)/sqrt(2.0*(control->tsubRequested/control->nbin)*(fabs(control->obsBW)/control->nchan));
 	}
-	else if (control->tsys == 0.0 && control->tsky == 0.0 && control->gain == 0.0 && control->whiteLevel != 0)
+	else if (control->tsys == 0.0 && control->tsky == 0.0 && control->gain == 0.0)
 	{
 		control->radioNoise = control->whiteLevel;
 	}
@@ -1289,6 +1296,7 @@ void initialiseControl(controlStruct *control)
   control->whiteLevel = 0;
   control->scint_ts  = 0.0;
   control->scint_freqbw = 0.0;
+  control->scatter_ts = 0.0;
   control->tsys = 0.0;
   control->tsky = 0.0;
   control->gain = 0.0;
@@ -1308,15 +1316,23 @@ int dft_profiles (int N, double *in, fftw_complex *out)
 {
 	//  dft of profiles 
 	///////////////////////////////////////////////////////////////////////
+	int i;
+	double *inUse;
 	
 	//printf ("%lf\n", in[0]);
 	//double *in;
 	//fftw_complex *out;
 	fftw_plan p;
 	
+	inUse = (double *)malloc(sizeof(double)*N);
 	//in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
 	//out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
-	p = fftw_plan_dft_r2c_1d(N, in, out, FFTW_MEASURE);
+	p = fftw_plan_dft_r2c_1d(N, inUse, out, FFTW_MEASURE);
+
+	for (i=0; i<N; i++)
+	{
+		inUse[i] = in[i];
+	}
 
 	fftw_execute(p);
 
@@ -1324,6 +1340,7 @@ int dft_profiles (int N, double *in, fftw_complex *out)
 	//fftw_free(in); 
 	//fftw_free(out);
   
+	free(inUse);
 	return 0;
 }
 
@@ -1358,23 +1375,15 @@ int inverse_dft (double *real_p, double *ima_p, int ncount, double *p_new)
 	fftw_plan plan;
 	fftw_complex *cp;
 
+	int i;
+	double real,ima,amp,cosina,sina;
+
 	dp = (double *)malloc(sizeof (double) * ncount);
 	cp = (fftw_complex *)fftw_malloc(sizeof (fftw_complex) * ncount);
 	memset(dp, 0, sizeof (double) * ncount);
 	memset(cp, 0, sizeof (fftw_complex) * ncount);
 
-	// initialize the dft...
-	double *dp_t;
-	fftw_plan plan_t;
-	fftw_complex *cp_t;
-
-	dp_t = (double *)malloc(sizeof (double) * ncount);
-	cp_t = (fftw_complex *)fftw_malloc(sizeof (fftw_complex) * ncount);
-	memset(dp_t, 0, sizeof (double) * ncount);
-	memset(cp_t, 0, sizeof (fftw_complex) * ncount);
-
-	int i;
-	double real,ima,amp,cosina,sina;
+  plan = fftw_plan_dft_c2r_1d(ncount, cp, dp, FFTW_MEASURE);
 
 	for (i = 0; i < ncount; i++)
 	{
@@ -1394,8 +1403,6 @@ int inverse_dft (double *real_p, double *ima_p, int ncount, double *p_new)
 			//cp[i][1]=ima_s[i]-ima_p[i];
 			//cp[i][0]=-real_s[i]+real_p[i];
 			//cp[i][1]=-ima_s[i]+ima_p[i];
-			cp_t[i][0] = real_p[i];
-			cp_t[i][1] = ima_p[i];
 			//cp[i][0]=real_p[i];
 			//cp[i][1]=ima_p[i];
 		}
@@ -1403,20 +1410,8 @@ int inverse_dft (double *real_p, double *ima_p, int ncount, double *p_new)
 		{
 			cp[i][0]=0.0;
 			cp[i][1]=0.0;
-			cp_t[i][0]=0.0;
-			cp_t[i][1]=0.0;
 		}
 	}
-
-  plan_t = fftw_plan_dft_c2r_1d(ncount, cp_t, dp_t, FFTW_MEASURE);
-
-  fftw_execute(plan_t);
-
-  fftw_destroy_plan(plan_t);
-
-	///////////////////////////////////////////////////////////////
-
-  plan = fftw_plan_dft_c2r_1d(ncount, cp, dp, FFTW_MEASURE);
 
   fftw_execute(plan);
 
@@ -1428,6 +1423,8 @@ int inverse_dft (double *real_p, double *ima_p, int ncount, double *p_new)
 		//printf ("%lf\n", p_new[i]);
 	}
 
+	free(dp);
+	fftw_free(cp);
 	return 0;
 }
 
@@ -1457,17 +1454,6 @@ int preRot (double *p, int nphase, int nchn, double *real_p, double *ima_p)
 	int i,j;
 	
 	/////////////////////////////////////////////////////////////////////////////////
-	double test[nphase];  
-
-	for (i=0;i<nphase;i++)
-	{
-		test[i]=p[i];
-	}
-	fftw_complex *out_t;
-	out_t = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * nphase);
-	dft_profiles(nphase,test,out_t);
-	//////////////////////////////////////////////////////////////////////////////
-
 	fftw_complex *out_p;
 	
 	out_p = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * nphase);
@@ -1495,8 +1481,116 @@ int preRot (double *p, int nphase, int nchn, double *real_p, double *ima_p)
 	}
 
 	fftw_free(out_p); 
-	fftw_free(out_t); 
 
 	return 0;
 }
 
+int inverse_dft_profiles (int N, double *out, fftw_complex *in)
+// inverse dft of profiles
+{
+	///////////////////////////////////////////////////////////////////////
+	int i;
+	double *dp;
+
+	fftw_plan plan;
+	fftw_complex *cp;
+	
+	dp = (double *)malloc(sizeof(double)*N);
+	cp = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*N);
+	memset(dp, 0, sizeof(double)*N);
+	memset(cp, 0, sizeof(fftw_complex)*N);
+
+	plan = fftw_plan_dft_c2r_1d(N, cp, dp, FFTW_MEASURE);
+
+	for (i=0; i<N; i++)
+	{
+		cp[i][0] = in[i][0];
+		cp[i][1] = in[i][1];
+	}
+
+	fftw_execute(plan);
+	fftw_destroy_plan(plan);
+
+	for (i=0; i<N; i++)
+	{
+		out[i] = dp[i]/N;
+	}
+
+	free(dp);
+	fftw_free(cp);
+
+	return 0;
+}
+
+int simScatter (channel *chan, controlStruct *control)
+{
+	int i, j;
+	double *scatter;
+	int n = control->nbin;
+	int nchn = control->nchan;
+	double freq;
+	double f0 = control->cFreq + fabs(control->obsBW)/2.0; // Highest frequency
+
+	double ts0 = control->scatter_ts;
+	double ts;
+	
+	double period = control->period;
+
+	double *in, *out;
+	double sumIn, sumOut;
+	fftw_complex *out1, *out2, *out3;
+
+	scatter = (double *)malloc(sizeof(double)*n);
+	in = (double *)malloc(sizeof(double)*n);
+	out = (double *)malloc(sizeof(double)*n);
+
+	out1 = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*n);
+	out2 = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*n);
+	out3 = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*n);
+
+	for (i=0; i<nchn; i++)
+	{
+		freq = f0 - fabs(control->obsBW/(double)control->nchan)*i-fabs(control->obsBW/(double)control->nchan)*0.5; // Must fix
+		ts = pow(freq/control->cFreq, -4.0)*ts0;
+
+		sumIn = 0.0;
+		for (j=0; j<n; j++)
+		{
+			scatter[j] = exp(-((double)(j)/n)/(ts/period));
+			in[j] = chan[i].pol[0].val[j];
+			sumIn += chan[i].pol[0].val[j];
+		}
+
+		dft_profiles (n, in, out1);
+		dft_profiles (n, scatter, out2);
+
+		for (j=0; j<n; j++)
+		{
+			out3[j][0] = out1[j][0]*out2[j][0] - out1[j][1]*out2[j][1];
+			out3[j][1] = out1[j][0]*out2[j][1] + out1[j][1]*out2[j][0];
+		}
+
+		inverse_dft_profiles (n, out, out3);
+
+		sumOut = 0.0;
+		for (j=0; j<n; j++)
+		{
+			sumOut += out[j];
+		}
+
+		for (j=0; j<n; j++)
+		{
+			chan[i].pol[0].val[j] = out[j]*(sumIn/sumOut);
+		}
+	}
+
+	fftw_free(out1);
+	fftw_free(out2);
+	fftw_free(out3);
+
+	free(scatter);
+	free(in);
+	free(out);
+
+	return 0;
+}

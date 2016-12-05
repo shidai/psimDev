@@ -108,6 +108,7 @@ typedef struct controlStruct {
 
   double scint_freqbw;
   double scint_ts;
+  double scatter_ts;
 
 	int bat;  // default: bat = 0, simulate at the observatory
   // Automatically calculated
@@ -170,7 +171,11 @@ double simTemplate(controlStruct *control, tmplStruct *tmpl, double SI, int chan
 int readSI(controlStruct *control, double *phaseResolvedSI);
 
 int dft_profiles (int N, double *in, fftw_complex *out);
+int inverse_dft_profiles (int N, double *out, fftw_complex *in);
+
 int rotate (int N, double *real_p, double *real_p_rotate, double *ima_p, double *ima_p_rotate, double rot);
 int inverse_dft (double *real_p, double *ima_p, int ncount, double *p_new);
 int rotateSI (double *s, int nphase, double rot, double *sOut);
 int preRot (double *p, int nphase, int nchn, double *real_p, double *ima_p);
+
+int simScatter (channel *chan, controlStruct *control);
